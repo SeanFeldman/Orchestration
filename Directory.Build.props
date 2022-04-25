@@ -1,0 +1,23 @@
+<Project>
+    <PropertyGroup>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <Deterministic>true</Deterministic>
+        <ImplicitUsings>true</ImplicitUsings>
+        <!-- While ManagePackageVersionsCentrally is in preview, the default is opt out. https://github.com/NuGet/Home/wiki/Centrally-managing-NuGet-package-versions#opt-in-central-package-version-management -->
+        <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    </PropertyGroup>
+    
+    <ItemGroup>
+        <Using Include="System" />
+        <Using Include="System.Reflection" />
+        <Using Include="Azure" />
+        <Using Include="Azure.Core.Serialization" />
+        <Using Include="Azure.Messaging.ServiceBus" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Azure.Messaging.ServiceBus" />
+    </ItemGroup>
+
+</Project>
