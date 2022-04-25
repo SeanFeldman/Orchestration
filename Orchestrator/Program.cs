@@ -1,7 +1,6 @@
 ﻿WriteLine(Assembly.GetExecutingAssembly().GetName().Name);
 
-//var connectionString = Environment.GetEnvironmentVariable("AzureServiceBus_ConnectionString");
-var connectionString = "Endpoint=sb://seanfeldman-test.servicebus.windows.net/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=Y8jOv/ZUzbdVWpFP+/MR/5o2e3hCpMJMtWGjdo17ucw=";
+var connectionString = Environment.GetEnvironmentVariable("AzureServiceBus_ConnectionString");
 
 var client = new ServiceBusClient(connectionString);
 
@@ -23,23 +22,13 @@ processor.SessionInitializingAsync += args =>
 processor.SessionClosingAsync += async args =>
 {
     WriteLine($"Closing session with ID: {args.SessionId}");
-
-    var sessionState = await args.GetSessionStateAsync();
-    if (sessionState is not null)
-    {
-        var state = sessionState.ToObject<State>(new JsonObjectSerializer())!;
-
-        if (state.Completed)
-        {
-            await args.SetSessionStateAsync(null);
-        }
-    }
 };
 
 processor.ProcessErrorAsync += args =>
 {
     // TODO: no session ID?
     WriteLine($"Error: {args.Exception}", warning: true);
+    
     return Task.CompletedTask;
 };
 
@@ -51,7 +40,7 @@ processor.ProcessMessageAsync += async args =>
 
     var sessionState = await args.GetSessionStateAsync();
     var state = sessionState is null
-        ? new State {RetryIn = TimeSpan.FromSeconds(20), TotalRetries = 2 }
+        ? new State()
         : sessionState.ToObject<State>(new JsonObjectSerializer())!;
 
     if (state.Completed)
@@ -67,28 +56,28 @@ processor.ProcessMessageAsync += async args =>
         "PaymentAccepted" => async delegate
         {
             state.PaymentReceived = true;
-            await SetTimeout(client, args, state);
+            await SetTimeoutIfNecessary(client, args, state, TimeSpan.FromSeconds(5));
         },
         "ItemShipped" => async delegate
         {
             state.ItemShipped = true;
-            await SetTimeout(client, args, state);
+            await SetTimeoutIfNecessary(client, args, state, TimeSpan.FromSeconds(5));
         },
         "Timeout" => async delegate
         {
-            if (state.Completed || sessionState is null) // sessionState is null when timeout arrives after orchestration is completed
+            if (state.Completed || sessionState is null)
             {
                 WriteLine($"Orchestration ID {args.SessionId} has completed. Discarding timeout.");
                 return;
             }
-
-            if (state.ShouldRetry())
+            
+            if (state.RetriesCount < 3)
             {
-                await SetTimeout(client, args, state);
+                await SetTimeoutIfNecessary(client, args, state, TimeSpan.FromSeconds(5));
             }
             else
             {
-                WriteLine($"Exhausted all retries ({state.TotalRetries}), executing compensating action and completing session with ID {args.SessionId}", warning: true);
+                WriteLine($"Exhausted all retries ({state.RetriesCount}). Executing compensating action and completing session with ID {args.SessionId}", warning: true);
                 // Compensating action here
                 await args.SetSessionStateAsync(null);
             }
@@ -98,33 +87,25 @@ processor.ProcessMessageAsync += async args =>
 
     await ExecuteAction(state);
 
-    if (state.Completed)
-    {
-        WriteLine($"Removing state for session ID {args.SessionId}");
-        await args.SetSessionStateAsync(null);
-    }
-
-    static async Task SetTimeout(ServiceBusClient client, ProcessSessionMessageEventArgs args, State state)
+    static async Task SetTimeoutIfNecessary(ServiceBusClient client, ProcessSessionMessageEventArgs args, State state, TimeSpan timeout)
     {
         if (state.Completed)
         {
-            WriteLine($"Orchestration with session ID {args.SessionId} has completed.");
-            await args.SetSessionStateAsync(BinaryData.FromObjectAsJson(state));
-
+            WriteLine($"Orchestration with session ID {args.SessionId} has successfully completed. Sending notification (TBD).");
+            await args.SetSessionStateAsync(null);
             return;
         }
 
-        WriteLine($"Scheduling a timeout to check in {state.RetryIn}");
+        WriteLine($"Scheduling a timeout to check in {timeout}");
 
         var publisher = client.CreateSender("orchestration");
         await publisher.ScheduleMessageAsync(new ServiceBusMessage
         {
             SessionId = args.Message.SessionId,
             ApplicationProperties = { { "MessageType", "Timeout" } }
-        }, DateTimeOffset.Now.Add(state.RetryIn));
+        }, DateTimeOffset.Now.Add(timeout));
 
-        state.Retried();
-
+        state.RetriesCount++;
         await args.SetSessionStateAsync(BinaryData.FromObjectAsJson(state));
     }
 };

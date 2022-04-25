@@ -2,8 +2,7 @@
 
 Console.WriteLine(Assembly.GetExecutingAssembly().GetName().Name);
 
-//var connectionString = Environment.GetEnvironmentVariable("AzureServiceBus_ConnectionString");
-var connectionString = "Endpoint=sb://seanfeldman-test.servicebus.windows.net/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=Y8jOv/ZUzbdVWpFP+/MR/5o2e3hCpMJMtWGjdo17ucw=";
+var connectionString = Environment.GetEnvironmentVariable("AzureServiceBus_ConnectionString");
 
 var client = new ServiceBusClient(connectionString);
 

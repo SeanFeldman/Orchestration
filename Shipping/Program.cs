@@ -2,14 +2,13 @@
 
 Console.WriteLine(Assembly.GetExecutingAssembly().GetName().Name);
 
-//var connectionString = Environment.GetEnvironmentVariable("AzureServiceBus_ConnectionString");
-var connectionString = "Endpoint=sb://seanfeldman-test.servicebus.windows.net/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=Y8jOv/ZUzbdVWpFP+/MR/5o2e3hCpMJMtWGjdo17ucw=";
+var connectionString = Environment.GetEnvironmentVariable("AzureServiceBus_ConnectionString");
 
 var client = new ServiceBusClient(connectionString);
 
 var publisher = client.CreateSender("orchestration");
 
-// ScheduledEnqueueTime doesn't work with Sessions?
+// TODO: ScheduledEnqueueTime doesn't work with Sessions?
 // await publisher.SendMessageAsync(new ServiceBusMessage("Shipping OK")
 // {
 //     SessionId = Correlation.Id,
